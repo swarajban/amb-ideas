@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>My Page</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                height: 100%;
+                width: 100%;
+                background-color: #de9800;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .circle {
+                width: 30vmin;
+                height: 30vmin;
+                background-color: black;
+                border-radius: 50%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .number {
+                color: white;
+                font-family: Arial, sans-serif;
+                font-size: 10vmin;
+                font-weight: bold;
+            }
+
+            .input-container {
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .input-container input {
+                padding: 8px 12px;
+                font-size: 16px;
+                width: 80px;
+                text-align: center;
+                border: 2px solid black;
+                border-radius: 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="circle">
+            <span class="number">40</span>
+        </div>
+        <div class="input-container">
+            <input type="text" id="numberInput" value="40" maxlength="3" />
+        </div>
+        <script>
+            const input = document.getElementById("numberInput");
+            const display = document.querySelector(".number");
+
+            function updateDisplay() {
+                const value = parseInt(input.value) || 0;
+                display.textContent = input.value;
+
+                let color;
+                if (value < 20) {
+                    color = "white";
+                } else if (value <= 29) {
+                    color = "green";
+                } else if (value <= 39) {
+                    color = "blue";
+                } else if (value <= 89) {
+                    color = "orange";
+                } else {
+                    color = "red";
+                }
+                display.style.color = color;
+            }
+
+            input.addEventListener("input", updateDisplay);
+            updateDisplay();
+        </script>
+    </body>
+</html>

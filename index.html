@@ -98,14 +98,24 @@
             const increaseBtn = document.getElementById("increaseBtn");
             let value = 40;
 
-            const engineSound = new Audio("engine.m4a");
+            const engineSound = new Audio("engine.mp3");
             const brakeSound = new Audio("brake.m4a");
+            engineSound.loop = true;
 
-            function playSound() {
+            function startEngineSound() {
                 if (value >= 2) {
                     engineSound.currentTime = 0;
                     engineSound.play();
-                } else {
+                }
+            }
+
+            function stopEngineSound() {
+                engineSound.pause();
+                engineSound.currentTime = 0;
+            }
+
+            function playBrakeIfNeeded() {
+                if (value <= 1) {
                     brakeSound.currentTime = 0;
                     brakeSound.play();
                 }
@@ -133,7 +143,7 @@
                 if (value > 0) {
                     value--;
                     updateDisplay();
-                    playSound();
+                    playBrakeIfNeeded();
                 }
             }
 
@@ -141,7 +151,6 @@
                 if (value < 100) {
                     value++;
                     updateDisplay();
-                    playSound();
                 }
             }
 
@@ -156,6 +165,7 @@
 
                 const start = (e) => {
                     e.preventDefault();
+                    startEngineSound();
                     interval = startHold(action);
                 };
 
@@ -163,6 +173,7 @@
                     if (interval) {
                         clearInterval(interval);
                         interval = null;
+                        stopEngineSound();
                     }
                 };
 

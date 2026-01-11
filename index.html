@@ -98,6 +98,19 @@
             const increaseBtn = document.getElementById("increaseBtn");
             let value = 40;
 
+            const engineSound = new Audio("engine.m4a");
+            const brakeSound = new Audio("brake.m4a");
+
+            function playSound() {
+                if (value >= 2) {
+                    engineSound.currentTime = 0;
+                    engineSound.play();
+                } else {
+                    brakeSound.currentTime = 0;
+                    brakeSound.play();
+                }
+            }
+
             function updateDisplay() {
                 display.textContent = value;
 
@@ -116,19 +129,52 @@
                 display.style.color = color;
             }
 
-            decreaseBtn.addEventListener("click", () => {
+            function decrease() {
                 if (value > 0) {
                     value--;
                     updateDisplay();
+                    playSound();
                 }
-            });
+            }
 
-            increaseBtn.addEventListener("click", () => {
+            function increase() {
                 if (value < 100) {
                     value++;
                     updateDisplay();
+                    playSound();
                 }
-            });
+            }
+
+            function startHold(action) {
+                action();
+                let interval = setInterval(action, 100);
+                return interval;
+            }
+
+            function setupButton(btn, action) {
+                let interval = null;
+
+                const start = (e) => {
+                    e.preventDefault();
+                    interval = startHold(action);
+                };
+
+                const stop = () => {
+                    if (interval) {
+                        clearInterval(interval);
+                        interval = null;
+                    }
+                };
+
+                btn.addEventListener("mousedown", start);
+                btn.addEventListener("mouseup", stop);
+                btn.addEventListener("mouseleave", stop);
+                btn.addEventListener("touchstart", start);
+                btn.addEventListener("touchend", stop);
+            }
+
+            setupButton(decreaseBtn, decrease);
+            setupButton(increaseBtn, increase);
 
             updateDisplay();
 

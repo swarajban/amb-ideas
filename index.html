@@ -29,6 +29,17 @@
                 display: flex;
                 justify-content: center;
                 align-items: center;
+                position: relative;
+            }
+
+            .tick {
+                position: absolute;
+                width: 2px;
+                height: 1vmin;
+                background-color: grey;
+                top: 0.5vmin;
+                left: 50%;
+                transform-origin: 50% 14.5vmin;
             }
 
             .number {
@@ -38,20 +49,38 @@
                 font-weight: bold;
             }
 
-            .input-container {
+            .button-container {
                 position: fixed;
                 bottom: 20px;
                 left: 50%;
                 transform: translateX(-50%);
+                display: flex;
+                gap: 40px;
             }
 
-            .input-container input {
-                padding: 8px 12px;
-                font-size: 16px;
-                width: 80px;
-                text-align: center;
-                border: 2px solid black;
-                border-radius: 4px;
+            .btn {
+                width: 60px;
+                height: 60px;
+                background-color: black;
+                border: none;
+                cursor: pointer;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            .btn-circle {
+                border-radius: 50%;
+            }
+
+            .btn-square {
+                border-radius: 0;
+            }
+
+            .minus,
+            .plus {
+                color: red;
+                font-size: 30px;
+                font-weight: bold;
             }
         </style>
     </head>
@@ -59,16 +88,18 @@
         <div class="circle">
             <span class="number">40</span>
         </div>
-        <div class="input-container">
-            <input type="text" id="numberInput" value="40" maxlength="3" />
+        <div class="button-container">
+            <button class="btn btn-circle" id="decreaseBtn"><span class="minus">−</span></button>
+            <button class="btn btn-square" id="increaseBtn"><span class="plus">+</span></button>
         </div>
         <script>
-            const input = document.getElementById("numberInput");
             const display = document.querySelector(".number");
+            const decreaseBtn = document.getElementById("decreaseBtn");
+            const increaseBtn = document.getElementById("increaseBtn");
+            let value = 40;
 
             function updateDisplay() {
-                const value = parseInt(input.value) || 0;
-                display.textContent = input.value;
+                display.textContent = value;
 
                 let color;
                 if (value < 20) {
@@ -85,8 +116,30 @@
                 display.style.color = color;
             }
 
-            input.addEventListener("input", updateDisplay);
+            decreaseBtn.addEventListener("click", () => {
+                if (value > 0) {
+                    value--;
+                    updateDisplay();
+                }
+            });
+
+            increaseBtn.addEventListener("click", () => {
+                if (value < 100) {
+                    value++;
+                    updateDisplay();
+                }
+            });
+
             updateDisplay();
+
+            // Create 60 tick marks
+            const circle = document.querySelector(".circle");
+            for (let i = 0; i < 60; i++) {
+                const tick = document.createElement("div");
+                tick.className = "tick";
+                tick.style.transform = `rotate(${i * 6}deg)`;
+                circle.appendChild(tick);
+            }
         </script>
     </body>
 </html>

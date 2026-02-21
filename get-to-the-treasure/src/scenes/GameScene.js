@@ -10,10 +10,12 @@ function seededRandom(seed) {
 
 const HOUSE_COLORS = [0xc0392b, 0x2980b9, 0x27ae60, 0x8e44ad, 0xd35400, 0x16a085];
 const ROOF_COLORS = [0x7f1d12, 0x1a5276, 0x1e8449, 0x6c3483, 0xa04000, 0x0e6655];
-const CHUNK_WIDTH = 350;
+const CHUNK_WIDTH = 500;
 const HOUSE_TEX_W = 82;
 const HOUSE_TEX_H = 80;
 const CAR_W = 60;
+const CHEST_W = 30;
+const CHEST_H = 28;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -25,9 +27,12 @@ export class GameScene extends Phaser.Scene {
     this.roadY = height / 2;
     this.roadHeight = 80;
 
-    // Track generated house chunks so we don't duplicate
+    // Track generated chunks so we don't duplicate
     this.generatedChunks = new Set();
+    this.generatedTreasureChunks = new Set();
     this.houses = [];
+    this.treasures = [];
+    this.treasureCount = 0;
 
     // House interaction state
     this.insideHouse = null;
@@ -35,9 +40,11 @@ export class GameScene extends Phaser.Scene {
     this.nearbyHouse = null;
 
     this.generateHouseTextures();
+    this.createTreasureTextures();
     this.drawRoad(width, this.roadY, this.roadHeight);
     this.drawCar(width, this.roadY, this.roadHeight);
     this.createIndicators();
+    this.createHUD(width);
 
     // Keyboard input
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -56,6 +63,244 @@ export class GameScene extends Phaser.Scene {
 
     this.setupWeather(width, height);
   }
+
+  // ─── Treasure Chest Textures ───────────────────────────────────
+
+  createTreasureTextures() {
+    const gfx = this.add.graphics();
+    const w = CHEST_W;
+    const h = CHEST_H;
+
+    // Soft golden ground glow
+    gfx.fillStyle(0xffd700, 0.12);
+    gfx.fillEllipse(w / 2, h - 2, w + 10, 8);
+
+    // Chest body — rich wood brown
+    gfx.fillStyle(0x8b4513);
+    gfx.fillRoundedRect(2, h * 0.45, w - 4, h * 0.52, 3);
+
+    // Wood grain lines on body
+    gfx.lineStyle(1, 0x6b3410, 0.4);
+    gfx.lineBetween(5, h * 0.6, w - 5, h * 0.6);
+    gfx.lineBetween(5, h * 0.75, w - 5, h * 0.75);
+
+    // Chest lid — darker, slightly wider
+    gfx.fillStyle(0x6b3410);
+    gfx.fillRoundedRect(1, 4, w - 2, h * 0.45, { tl: 5, tr: 5, bl: 0, br: 0 });
+
+    // Gold trim band at junction
+    gfx.fillStyle(0xdaa520);
+    gfx.fillRect(1, h * 0.42, w - 2, 4);
+
+    // Gold rim on lid top
+    gfx.fillStyle(0xdaa520, 0.7);
+    gfx.fillRect(1, 4, w - 2, 2);
+
+    // Gold vertical straps
+    gfx.fillStyle(0xdaa520, 0.5);
+    gfx.fillRect(5, 4, 2, h * 0.9);
+    gfx.fillRect(w - 7, 4, 2, h * 0.9);
+
+    // Gold clasp in center
+    gfx.fillStyle(0xffd700);
+    gfx.fillRoundedRect(w / 2 - 4, h * 0.35, 8, 10, 2);
+
+    // Keyhole
+    gfx.fillStyle(0x2a1a00);
+    gfx.fillCircle(w / 2, h * 0.42, 2);
+    gfx.fillRect(w / 2 - 1, h * 0.42, 2, 4);
+
+    // Golden glow peeking from lid crack
+    gfx.fillStyle(0xffe44d, 0.8);
+    gfx.fillRect(4, h * 0.43, w - 8, 2);
+
+    gfx.generateTexture('chest', w + 12, h + 4);
+    gfx.destroy();
+
+    // Sparkle particle for collection burst
+    const sparkGfx = this.add.graphics();
+    sparkGfx.fillStyle(0xffd700);
+    sparkGfx.fillCircle(3, 3, 3);
+    sparkGfx.fillStyle(0xfffacd, 0.9);
+    sparkGfx.fillCircle(3, 3, 1.5);
+    sparkGfx.generateTexture('sparkle', 6, 6);
+    sparkGfx.destroy();
+
+    // Larger star for the idle shimmer
+    const starGfx = this.add.graphics();
+    starGfx.fillStyle(0xffffff, 0.9);
+    starGfx.fillCircle(2, 2, 2);
+    starGfx.generateTexture('star_tiny', 4, 4);
+    starGfx.destroy();
+  }
+
+  // ─── HUD ──────────────────────────────────────────────────────
+
+  createHUD(width) {
+    // Background pill
+    this.hudBg = this.add.graphics();
+    this.hudBg.fillStyle(0x000000, 0.4);
+    this.hudBg.fillRoundedRect(0, 0, 72, 32, 8);
+    this.hudBg.setScrollFactor(0);
+    this.hudBg.setPosition(width - 92, 10);
+    this.hudBg.setDepth(20);
+
+    // Small chest icon
+    this.hudIcon = this.add.image(width - 70, 27, 'chest');
+    this.hudIcon.setScale(0.55);
+    this.hudIcon.setScrollFactor(0);
+    this.hudIcon.setDepth(20);
+
+    // Count text
+    this.hudText = this.add.text(width - 60, 16, '×0', {
+      fontSize: '16px',
+      fontFamily: 'Georgia, "Times New Roman", serif',
+      fontStyle: 'bold',
+      color: '#FFD700',
+      stroke: '#2a1a00',
+      strokeThickness: 3,
+    });
+    this.hudText.setScrollFactor(0);
+    this.hudText.setDepth(20);
+  }
+
+  updateHUD() {
+    this.hudText.setText(`×${this.treasureCount}`);
+
+    // Satisfying punch scale on the icon and text
+    this.tweens.add({
+      targets: [this.hudIcon, this.hudText],
+      scaleX: 1.5,
+      scaleY: 1.5,
+      duration: 150,
+      yoyo: true,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.hudIcon.setScale(0.55);
+        this.hudText.setScale(1);
+      },
+    });
+  }
+
+  // ─── Treasure Spawning & Collection ────────────────────────────
+
+  spawnTreasures() {
+    const cam = this.cameras.main;
+    const startChunk = Math.floor(cam.scrollX / CHUNK_WIDTH);
+    const endChunk = Math.floor((cam.scrollX + cam.width) / CHUNK_WIDTH) + 2;
+
+    for (let chunk = startChunk; chunk <= endChunk; chunk++) {
+      if (chunk < 1 || this.generatedTreasureChunks.has(chunk)) continue;
+      this.generatedTreasureChunks.add(chunk);
+
+      // ~12% of chunks get a treasure — rare enough to feel rewarding
+      const rand = seededRandom(chunk * 37 + 41);
+      if (rand > 0.12) continue;
+
+      const xOffset = seededRandom(chunk * 43 + 47) * (CHUNK_WIDTH - 60);
+      const x = chunk * CHUNK_WIDTH + 30 + xOffset;
+      const baseY = this.roadY - this.roadHeight / 4 - 6;
+
+      const chest = this.add.image(x, baseY, 'chest');
+      chest.setOrigin(0.5, 1);
+      chest.setData('baseY', baseY);
+      chest.setData('phase', seededRandom(chunk * 53 + 59) * Math.PI * 2);
+      this.treasures.push(chest);
+    }
+  }
+
+  animateTreasures() {
+    const now = this.time.now;
+    for (const chest of this.treasures) {
+      // Gentle bob
+      const phase = chest.getData('phase');
+      chest.y = chest.getData('baseY') + Math.sin(now / 400 + phase) * 3;
+
+      // Subtle golden shimmer via tint oscillation
+      const shimmer = Math.sin(now / 600 + phase) * 0.5 + 0.5;
+      const r = 0xff;
+      const g = Math.floor(0xd7 + shimmer * 0x28);
+      const b = Math.floor(shimmer * 0x40);
+      chest.setTint(Phaser.Display.Color.GetColor(r, g, b));
+    }
+  }
+
+  checkTreasureCollection() {
+    if (this.insideHouse || this.isAnimating) return;
+
+    const carLeft = this.car.x - CAR_W / 2;
+    const carRight = this.car.x + CAR_W / 2;
+
+    for (let i = this.treasures.length - 1; i >= 0; i--) {
+      const chest = this.treasures[i];
+      const cLeft = chest.x - CHEST_W / 2;
+      const cRight = chest.x + CHEST_W / 2;
+
+      if (carRight > cLeft && carLeft < cRight) {
+        this.treasures.splice(i, 1);
+        this.collectTreasure(chest);
+      }
+    }
+  }
+
+  collectTreasure(chest) {
+    this.treasureCount++;
+    this.updateHUD();
+
+    const cx = chest.x;
+    const cy = chest.y - CHEST_H / 2;
+
+    // Flash the chest white and scale up before vanishing
+    this.tweens.add({
+      targets: chest,
+      scaleX: 1.6,
+      scaleY: 1.6,
+      alpha: 0,
+      duration: 350,
+      ease: 'Cubic.easeOut',
+      onStart: () => chest.setTint(0xffffff),
+      onComplete: () => chest.destroy(),
+    });
+
+    // Golden sparkle burst
+    const burst = this.add.particles(cx, cy, 'sparkle', {
+      speed: { min: 60, max: 180 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.2, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: 700,
+      quantity: 20,
+      emitting: false,
+    });
+    burst.explode();
+    this.time.delayedCall(800, () => burst.destroy());
+
+    // Upward star rise — a few stars float upward
+    const stars = this.add.particles(cx, cy, 'star_tiny', {
+      speed: { min: 30, max: 80 },
+      angle: { min: 240, max: 300 },
+      scale: { start: 1, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: 1000,
+      quantity: 6,
+      emitting: false,
+    });
+    stars.explode();
+    this.time.delayedCall(1100, () => stars.destroy());
+  }
+
+  cleanupTreasures() {
+    const camLeft = this.cameras.main.scrollX - 400;
+    this.treasures = this.treasures.filter((chest) => {
+      if (chest.x < camLeft) {
+        chest.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // ─── House Indicators ─────────────────────────────────────────
 
   createIndicators() {
     // Up arrow — shows when car can enter a house
@@ -80,6 +325,8 @@ export class GameScene extends Phaser.Scene {
     this.exitIndicator.setVisible(false);
     this.exitIndicator.setDepth(10);
   }
+
+  // ─── House Entry/Exit ─────────────────────────────────────────
 
   findNearbyHouse() {
     const carLeft = this.car.x - CAR_W / 2;
@@ -165,10 +412,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ─── Weather ──────────────────────────────────────────────────
+
   setupWeather(width, height) {
     this.weatherWidth = width;
     this.weatherHeight = height;
-    // Alternates: 'rain', 'snow', 'rain', 'snow', ...
     this.nextWeather = 'rain';
     this.activeEmitter = null;
 
@@ -177,14 +425,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   createWeatherTextures() {
-    // Raindrop — blue rectangle
     const rainGfx = this.add.graphics();
     rainGfx.fillStyle(0x4a90d9);
     rainGfx.fillRect(0, 0, 2, 8);
     rainGfx.generateTexture('raindrop', 2, 8);
     rainGfx.destroy();
 
-    // Snowflake — white circle
     const snowGfx = this.add.graphics();
     snowGfx.fillStyle(0xffffff);
     snowGfx.fillCircle(4, 4, 4);
@@ -193,7 +439,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   scheduleWeather() {
-    // Wait 10–40s before next weather event
     const delay = Phaser.Math.Between(10000, 40000);
     this.time.delayedCall(delay, () => this.startWeather());
   }
@@ -231,7 +476,6 @@ export class GameScene extends Phaser.Scene {
     }
     this.activeEmitter.setScrollFactor(0);
 
-    // Weather lasts 20–30s, then stop and schedule next clear period
     const duration = Phaser.Math.Between(20000, 30000);
     this.time.delayedCall(duration, () => this.stopWeather());
   }
@@ -239,13 +483,14 @@ export class GameScene extends Phaser.Scene {
   stopWeather() {
     if (this.activeEmitter) {
       this.activeEmitter.stop();
-      // Destroy after particles finish fading out
       const cleanup = this.activeEmitter;
       this.time.delayedCall(6000, () => cleanup.destroy());
       this.activeEmitter = null;
     }
     this.scheduleWeather();
   }
+
+  // ─── Update Loop ──────────────────────────────────────────────
 
   update() {
     if (!this.insideHouse && !this.isAnimating) {
@@ -265,7 +510,6 @@ export class GameScene extends Phaser.Scene {
       this.nearbyHouse = nearby;
 
       if (nearby) {
-        // Bouncing arrow indicator below the house
         const bounce = Math.sin(this.time.now / 300) * 4;
         this.enterIndicator.setPosition(nearby.x, nearby.y + 10 + bounce);
         this.enterIndicator.setVisible(true);
@@ -276,8 +520,10 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.enterIndicator.setVisible(false);
       }
+
+      // Treasure collection
+      this.checkTreasureCollection();
     } else if (this.insideHouse && !this.isAnimating) {
-      // Inside house — show exit indicator, listen for down arrow
       const bounce = Math.sin(this.time.now / 300) * 4;
       this.exitIndicator.setPosition(
         this.insideHouse.x,
@@ -289,12 +535,16 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Scroll the yellow dashes with the camera to create movement illusion
+    // Always running regardless of state
     this.dashes.tilePositionX = this.cameras.main.scrollX;
-
     this.spawnHouses();
+    this.spawnTreasures();
+    this.animateTreasures();
     this.cleanupHouses();
+    this.cleanupTreasures();
   }
+
+  // ─── House Textures ───────────────────────────────────────────
 
   generateHouseTextures() {
     const houseW = 70;
@@ -308,35 +558,22 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < HOUSE_COLORS.length; i++) {
       const gfx = this.add.graphics();
 
-      // Roof — triangle
       gfx.fillStyle(ROOF_COLORS[i]);
-      gfx.fillTriangle(
-        houseW / 2,
-        0, // peak
-        -6,
-        roofH, // left overhang
-        houseW + 6,
-        roofH, // right overhang
-      );
+      gfx.fillTriangle(houseW / 2, 0, -6, roofH, houseW + 6, roofH);
 
-      // Walls
       gfx.fillStyle(HOUSE_COLORS[i]);
       gfx.fillRect(0, roofH, houseW, houseH);
 
-      // Door — dark brown, centered
       gfx.fillStyle(0x5d3a1a);
       gfx.fillRect((houseW - doorW) / 2, roofH + houseH - doorH, doorW, doorH);
 
-      // Doorknob
       gfx.fillStyle(0xf1c40f);
       gfx.fillCircle((houseW - doorW) / 2 + doorW - 3, roofH + houseH - doorH / 2, 2);
 
-      // Windows — two, on each side of the door
       gfx.fillStyle(0xa8d8ea);
       gfx.fillRect(8, roofH + 10, winW, winH);
       gfx.fillRect(houseW - 8 - winW, roofH + 10, winW, winH);
 
-      // Window crosses
       gfx.lineStyle(1, 0x444444);
       gfx.lineBetween(8 + winW / 2, roofH + 10, 8 + winW / 2, roofH + 10 + winH);
       gfx.lineBetween(8, roofH + 10 + winH / 2, 8 + winW, roofH + 10 + winH / 2);
@@ -358,10 +595,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ─── House Spawning ───────────────────────────────────────────
+
   spawnHouses() {
     const cam = this.cameras.main;
     const startChunk = Math.floor(cam.scrollX / CHUNK_WIDTH);
-    // Generate a couple chunks ahead of what's visible
     const endChunk = Math.floor((cam.scrollX + cam.width) / CHUNK_WIDTH) + 2;
 
     for (let chunk = startChunk; chunk <= endChunk; chunk++) {
@@ -369,14 +607,12 @@ export class GameScene extends Phaser.Scene {
       this.generatedChunks.add(chunk);
 
       const rand = seededRandom(chunk * 7 + 1);
-      const rand2 = seededRandom(chunk * 13 + 3);
-      // Random x offset within the chunk for varied spacing
-      const xOffset = seededRandom(chunk * 11 + 5) * (CHUNK_WIDTH - 100);
-      const x = chunk * CHUNK_WIDTH + 50 + xOffset;
+      // Wide random x offset (0 to CHUNK_WIDTH) for truly irregular spacing
+      const xOffset = seededRandom(chunk * 11 + 5) * CHUNK_WIDTH;
+      const x = chunk * CHUNK_WIDTH + xOffset;
 
       const roadTop = this.roadY - this.roadHeight / 2;
 
-      // ~60% chance of a house above the road — well clear of the road edge
       if (rand < 0.6) {
         const colorIdx = Math.floor(seededRandom(chunk * 17 + 7) * HOUSE_COLORS.length);
         const yOffset = seededRandom(chunk * 19 + 9) * 30;
@@ -390,7 +626,6 @@ export class GameScene extends Phaser.Scene {
   cleanupHouses() {
     const camLeft = this.cameras.main.scrollX - 400;
     this.houses = this.houses.filter((house) => {
-      // Never cleanup the house the car is inside
       if (house === this.insideHouse) return true;
       if (house.x < camLeft) {
         house.destroy();
@@ -400,8 +635,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ─── Road & Car ───────────────────────────────────────────────
+
   drawRoad(width, roadY, roadHeight) {
-    // Road surface — pinned to camera so it always fills the screen
     const road = this.add.graphics();
     road.fillStyle(0x3a3a3a);
     road.fillRect(0, roadY - roadHeight / 2, width, roadHeight);
@@ -410,7 +646,6 @@ export class GameScene extends Phaser.Scene {
     road.lineBetween(0, roadY + roadHeight / 2, width, roadY + roadHeight / 2);
     road.setScrollFactor(0);
 
-    // Yellow dashes — create a tile texture so they repeat and scroll
     const dashLen = 30;
     const gapLen = 20;
     const tileW = dashLen + gapLen;
@@ -432,37 +667,29 @@ export class GameScene extends Phaser.Scene {
 
     const gfx = this.add.graphics();
 
-    // Car body — red rectangle
     gfx.fillStyle(0xdd3333);
     gfx.fillRoundedRect(0, 0, carW, carH, 6);
 
-    // Cabin / roof — darker red, smaller rectangle on top
     gfx.fillStyle(0xbb2222);
     gfx.fillRoundedRect(12, -14, 30, 16, 4);
 
-    // Window — light blue
     gfx.fillStyle(0xa8d8ea);
     gfx.fillRect(16, -11, 22, 10);
 
-    // Wheels — black circles
     gfx.fillStyle(0x222222);
     gfx.fillCircle(12, carH, wheelR);
     gfx.fillCircle(carW - 12, carH, wheelR);
 
-    // Hubcaps — gray
     gfx.fillStyle(0x888888);
     gfx.fillCircle(12, carH, 3);
     gfx.fillCircle(carW - 12, carH, 3);
 
-    // Headlight — orange circle on right like the drawing's orange circle
     gfx.fillStyle(0xe8871e);
     gfx.fillCircle(carW - 2, 10, 5);
 
-    // Bake into a texture so we can use it as a sprite
     gfx.generateTexture('car', carW + 4, carH + wheelR + 2);
     gfx.destroy();
 
-    // Place car on road — sitting on top of center line
     this.car = this.physics.add.sprite(width / 3, roadY - roadHeight / 4 - 2, 'car');
     this.car.setOrigin(0.5, 1);
   }

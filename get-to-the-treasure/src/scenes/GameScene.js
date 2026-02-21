@@ -11,6 +11,9 @@ function seededRandom(seed) {
 const HOUSE_COLORS = [0xc0392b, 0x2980b9, 0x27ae60, 0x8e44ad, 0xd35400, 0x16a085];
 const ROOF_COLORS = [0x7f1d12, 0x1a5276, 0x1e8449, 0x6c3483, 0xa04000, 0x0e6655];
 const CHUNK_WIDTH = 350;
+const HOUSE_TEX_W = 82;
+const HOUSE_TEX_H = 80;
+const CAR_W = 60;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -26,11 +29,17 @@ export class GameScene extends Phaser.Scene {
     this.generatedChunks = new Set();
     this.houses = [];
 
+    // House interaction state
+    this.insideHouse = null;
+    this.isAnimating = false;
+    this.nearbyHouse = null;
+
     this.generateHouseTextures();
     this.drawRoad(width, this.roadY, this.roadHeight);
     this.drawCar(width, this.roadY, this.roadHeight);
+    this.createIndicators();
 
-    // Keyboard input — only right arrow
+    // Keyboard input
     this.cursors = this.input.keyboard.createCursorKeys();
 
     // Physics: drag slows the car when we stop pressing right
@@ -46,6 +55,114 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setFollowOffset(-width / 3, 0);
 
     this.setupWeather(width, height);
+  }
+
+  createIndicators() {
+    // Up arrow — shows when car can enter a house
+    const upGfx = this.add.graphics();
+    upGfx.fillStyle(0xf5d442);
+    upGfx.fillTriangle(8, 0, 0, 10, 16, 10);
+    upGfx.generateTexture('arrow_up', 16, 10);
+    upGfx.destroy();
+
+    this.enterIndicator = this.add.image(0, 0, 'arrow_up');
+    this.enterIndicator.setVisible(false);
+    this.enterIndicator.setDepth(10);
+
+    // Down arrow — shows when car can exit a house
+    const downGfx = this.add.graphics();
+    downGfx.fillStyle(0xf5d442);
+    downGfx.fillTriangle(8, 10, 0, 0, 16, 0);
+    downGfx.generateTexture('arrow_down', 16, 10);
+    downGfx.destroy();
+
+    this.exitIndicator = this.add.image(0, 0, 'arrow_down');
+    this.exitIndicator.setVisible(false);
+    this.exitIndicator.setDepth(10);
+  }
+
+  findNearbyHouse() {
+    const carLeft = this.car.x - CAR_W / 2;
+    const carRight = this.car.x + CAR_W / 2;
+
+    for (const house of this.houses) {
+      const hLeft = house.x - HOUSE_TEX_W / 2;
+      const hRight = house.x + HOUSE_TEX_W / 2;
+      if (carRight > hLeft && carLeft < hRight) {
+        return house;
+      }
+    }
+    return null;
+  }
+
+  enterHouse(house) {
+    this.isAnimating = true;
+    this.enterIndicator.setVisible(false);
+    this.nearbyHouse = null;
+
+    // Stop car completely
+    this.car.body.setVelocity(0, 0);
+    this.car.body.setAcceleration(0, 0);
+    this.car.body.enable = false;
+
+    // Remember road position for exit
+    this.carRoadX = this.car.x;
+    this.carRoadY = this.car.y;
+
+    // Animate car shrinking up into the house
+    this.tweens.add({
+      targets: this.car,
+      x: house.x,
+      y: house.y - HOUSE_TEX_H * 0.45,
+      scaleX: 0.2,
+      scaleY: 0.2,
+      alpha: 0,
+      duration: 700,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        this.car.setVisible(false);
+        this.insideHouse = house;
+        this.isAnimating = false;
+
+        // Warm glow on house — tinted windows
+        house.setTint(0xffdd88);
+
+        // Show exit indicator
+        this.exitIndicator.setVisible(true);
+      },
+    });
+  }
+
+  exitHouse() {
+    const house = this.insideHouse;
+    this.isAnimating = true;
+    this.exitIndicator.setVisible(false);
+
+    // Remove warm glow
+    house.clearTint();
+
+    // Position car at house center, tiny and invisible
+    this.car.setPosition(house.x, house.y - HOUSE_TEX_H * 0.45);
+    this.car.setScale(0.2);
+    this.car.setAlpha(0);
+    this.car.setVisible(true);
+
+    // Animate car swooping back to road
+    this.tweens.add({
+      targets: this.car,
+      x: this.carRoadX,
+      y: this.carRoadY,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 700,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this.car.body.enable = true;
+        this.insideHouse = null;
+        this.isAnimating = false;
+      },
+    });
   }
 
   setupWeather(width, height) {
@@ -131,15 +248,45 @@ export class GameScene extends Phaser.Scene {
   }
 
   update() {
-    if (this.cursors.right.isDown) {
-      this.car.body.setAccelerationX(500);
-    } else {
-      this.car.body.setAccelerationX(0);
-    }
+    if (!this.insideHouse && !this.isAnimating) {
+      // Normal driving
+      if (this.cursors.right.isDown) {
+        this.car.body.setAccelerationX(500);
+      } else {
+        this.car.body.setAccelerationX(0);
+      }
 
-    // Prevent any leftward movement
-    if (this.car.body.velocity.x < 0) {
-      this.car.body.setVelocityX(0);
+      if (this.car.body.velocity.x < 0) {
+        this.car.body.setVelocityX(0);
+      }
+
+      // Check for nearby house
+      const nearby = this.findNearbyHouse();
+      this.nearbyHouse = nearby;
+
+      if (nearby) {
+        // Bouncing arrow indicator below the house
+        const bounce = Math.sin(this.time.now / 300) * 4;
+        this.enterIndicator.setPosition(nearby.x, nearby.y + 10 + bounce);
+        this.enterIndicator.setVisible(true);
+
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
+          this.enterHouse(nearby);
+        }
+      } else {
+        this.enterIndicator.setVisible(false);
+      }
+    } else if (this.insideHouse && !this.isAnimating) {
+      // Inside house — show exit indicator, listen for down arrow
+      const bounce = Math.sin(this.time.now / 300) * 4;
+      this.exitIndicator.setPosition(
+        this.insideHouse.x,
+        this.insideHouse.y + 10 + bounce,
+      );
+
+      if (Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
+        this.exitHouse();
+      }
     }
 
     // Scroll the yellow dashes with the camera to create movement illusion
@@ -228,13 +375,12 @@ export class GameScene extends Phaser.Scene {
       const x = chunk * CHUNK_WIDTH + 50 + xOffset;
 
       const roadTop = this.roadY - this.roadHeight / 2;
-      const roadBottom = this.roadY + this.roadHeight / 2;
 
       // ~60% chance of a house above the road — well clear of the road edge
       if (rand < 0.6) {
         const colorIdx = Math.floor(seededRandom(chunk * 17 + 7) * HOUSE_COLORS.length);
         const yOffset = seededRandom(chunk * 19 + 9) * 30;
-        const house = this.add.image(x, roadTop - 24 - yOffset, `house_${colorIdx}`);
+        const house = this.add.image(x, roadTop - 23 - yOffset, `house_${colorIdx}`);
         house.setOrigin(0.5, 1);
         this.houses.push(house);
       }
@@ -244,6 +390,8 @@ export class GameScene extends Phaser.Scene {
   cleanupHouses() {
     const camLeft = this.cameras.main.scrollX - 400;
     this.houses = this.houses.filter((house) => {
+      // Never cleanup the house the car is inside
+      if (house === this.insideHouse) return true;
       if (house.x < camLeft) {
         house.destroy();
         return false;

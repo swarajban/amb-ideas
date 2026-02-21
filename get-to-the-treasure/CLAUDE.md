@@ -43,7 +43,17 @@ get-to-the-treasure/
 - Both use Phaser's particle emitter system with `scrollFactor(0)` so they're pinned to the viewport
 - **Rain**: Blue 2x8px rectangles falling fast (300–500 speedY), slight wind slant (speedX -30 to -60), 1200ms lifespan, fading alpha
 - **Snow**: White 8px circles drifting gently (40–90 speedY), random horizontal sway (speedX -20 to +20), 6000ms lifespan, varied scale (0.3–1.0) for depth
-- Currently snow is always-on for design iteration; will be wired to a timed system (rain or snow every 15–45s)
+- Timed cycle: clear (10–40s) → rain (20–30s) → clear → snow → clear → rain...
+- Emitters call `stop()` when weather ends so particles fade out naturally; destroyed after 6s cleanup delay
+
+### House Entry
+- **Detection**: AABB overlap check each frame — car's 60px width vs house's 82px width
+- **Enter indicator**: Yellow bouncing triangle (▲) between house and road, animated via `Math.sin(time)`. Rendered at depth 10
+- **Enter animation** (up arrow): `Cubic.easeIn` tween — car moves to house center, shrinks to 20%, fades to 0. Physics body disabled during animation
+- **Occupied state**: House gets warm tint (`0xffdd88`) simulating lit windows. Exit indicator (▼) bounces below house
+- **Exit animation** (down arrow): `Cubic.easeOut` tween — car appears from house, grows to full size, swoops back to road position. Physics re-enabled on completion
+- **State machine**: Three states (driving / animating / inside) gate input — prevents driving while mid-animation or entering two houses
+- **Safety**: `cleanupHouses()` skips the occupied house to prevent destroying it while the car is inside
 
 ### Physics & Input
 - Right arrow key applies acceleration (500 px/s²)
@@ -59,7 +69,7 @@ get-to-the-treasure/
 ## Roadmap
 
 - [x] Houses along the road (above the road, procedurally generated)
-- [x] Weather effects (rain and snow particle systems)
-- [ ] Timed weather — rain or snow every 15–45s
+- [x] Weather effects (rain and snow particle systems, timed cycling)
+- [x] House entry/exit with animated transitions
 - [ ] Car selection
 - [ ] Treasure destination / win condition

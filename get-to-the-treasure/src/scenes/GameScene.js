@@ -45,30 +45,89 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.car, false, 1, 0);
     this.cameras.main.setFollowOffset(-width / 3, 0);
 
-    this.createSnow(width, height);
+    this.setupWeather(width, height);
   }
 
-  createSnow(width, height) {
-    // Small white snowflake texture — soft circle
-    const gfx = this.add.graphics();
-    gfx.fillStyle(0xffffff);
-    gfx.fillCircle(4, 4, 4);
-    gfx.generateTexture('snowflake', 8, 8);
-    gfx.destroy();
+  setupWeather(width, height) {
+    this.weatherWidth = width;
+    this.weatherHeight = height;
+    // Alternates: 'rain', 'snow', 'rain', 'snow', ...
+    this.nextWeather = 'rain';
+    this.activeEmitter = null;
 
-    this.snowEmitter = this.add.particles(0, 0, 'snowflake', {
-      x: { min: 0, max: width },
-      y: -10,
-      speedY: { min: 40, max: 90 },
-      speedX: { min: -20, max: 20 },
-      lifespan: 6000,
-      quantity: 2,
-      frequency: 80,
-      alpha: { start: 0.9, end: 0.2 },
-      scale: { min: 0.3, max: 1.0 },
-      rotate: { min: 0, max: 360 },
-    });
-    this.snowEmitter.setScrollFactor(0);
+    this.createWeatherTextures();
+    this.scheduleWeather();
+  }
+
+  createWeatherTextures() {
+    // Raindrop — blue rectangle
+    const rainGfx = this.add.graphics();
+    rainGfx.fillStyle(0x4a90d9);
+    rainGfx.fillRect(0, 0, 2, 8);
+    rainGfx.generateTexture('raindrop', 2, 8);
+    rainGfx.destroy();
+
+    // Snowflake — white circle
+    const snowGfx = this.add.graphics();
+    snowGfx.fillStyle(0xffffff);
+    snowGfx.fillCircle(4, 4, 4);
+    snowGfx.generateTexture('snowflake', 8, 8);
+    snowGfx.destroy();
+  }
+
+  scheduleWeather() {
+    // Wait 10–40s before next weather event
+    const delay = Phaser.Math.Between(10000, 40000);
+    this.time.delayedCall(delay, () => this.startWeather());
+  }
+
+  startWeather() {
+    const w = this.weatherWidth;
+    const type = this.nextWeather;
+    this.nextWeather = type === 'rain' ? 'snow' : 'rain';
+
+    if (type === 'rain') {
+      this.activeEmitter = this.add.particles(0, 0, 'raindrop', {
+        x: { min: 0, max: w },
+        y: -10,
+        speedY: { min: 300, max: 500 },
+        speedX: { min: -30, max: -60 },
+        lifespan: 1200,
+        quantity: 4,
+        frequency: 30,
+        alpha: { start: 0.7, end: 0.3 },
+        scaleY: { min: 1, max: 1.5 },
+      });
+    } else {
+      this.activeEmitter = this.add.particles(0, 0, 'snowflake', {
+        x: { min: 0, max: w },
+        y: -10,
+        speedY: { min: 40, max: 90 },
+        speedX: { min: -20, max: 20 },
+        lifespan: 6000,
+        quantity: 2,
+        frequency: 80,
+        alpha: { start: 0.9, end: 0.2 },
+        scale: { min: 0.3, max: 1.0 },
+        rotate: { min: 0, max: 360 },
+      });
+    }
+    this.activeEmitter.setScrollFactor(0);
+
+    // Weather lasts 20–30s, then stop and schedule next clear period
+    const duration = Phaser.Math.Between(20000, 30000);
+    this.time.delayedCall(duration, () => this.stopWeather());
+  }
+
+  stopWeather() {
+    if (this.activeEmitter) {
+      this.activeEmitter.stop();
+      // Destroy after particles finish fading out
+      const cleanup = this.activeEmitter;
+      this.time.delayedCall(6000, () => cleanup.destroy());
+      this.activeEmitter = null;
+    }
+    this.scheduleWeather();
   }
 
   update() {

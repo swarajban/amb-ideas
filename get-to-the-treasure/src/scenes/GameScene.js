@@ -44,6 +44,30 @@ export class GameScene extends Phaser.Scene {
     // Camera follows the car horizontally, keeping it in the left third
     this.cameras.main.startFollow(this.car, false, 1, 0);
     this.cameras.main.setFollowOffset(-width / 3, 0);
+
+    this.createRain(width, height);
+  }
+
+  createRain(width, height) {
+    // Small blue raindrop texture
+    const gfx = this.add.graphics();
+    gfx.fillStyle(0x4a90d9);
+    gfx.fillRect(0, 0, 2, 8);
+    gfx.generateTexture('raindrop', 2, 8);
+    gfx.destroy();
+
+    this.rainEmitter = this.add.particles(0, 0, 'raindrop', {
+      x: { min: 0, max: width },
+      y: -10,
+      speedY: { min: 300, max: 500 },
+      speedX: { min: -30, max: -60 },
+      lifespan: 1200,
+      quantity: 4,
+      frequency: 30,
+      alpha: { start: 0.7, end: 0.3 },
+      scaleY: { min: 1, max: 1.5 },
+    });
+    this.rainEmitter.setScrollFactor(0);
   }
 
   update() {

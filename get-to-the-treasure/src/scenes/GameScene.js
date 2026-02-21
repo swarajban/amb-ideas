@@ -45,29 +45,30 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.car, false, 1, 0);
     this.cameras.main.setFollowOffset(-width / 3, 0);
 
-    this.createRain(width, height);
+    this.createSnow(width, height);
   }
 
-  createRain(width, height) {
-    // Small blue raindrop texture
+  createSnow(width, height) {
+    // Small white snowflake texture — soft circle
     const gfx = this.add.graphics();
-    gfx.fillStyle(0x4a90d9);
-    gfx.fillRect(0, 0, 2, 8);
-    gfx.generateTexture('raindrop', 2, 8);
+    gfx.fillStyle(0xffffff);
+    gfx.fillCircle(4, 4, 4);
+    gfx.generateTexture('snowflake', 8, 8);
     gfx.destroy();
 
-    this.rainEmitter = this.add.particles(0, 0, 'raindrop', {
+    this.snowEmitter = this.add.particles(0, 0, 'snowflake', {
       x: { min: 0, max: width },
       y: -10,
-      speedY: { min: 300, max: 500 },
-      speedX: { min: -30, max: -60 },
-      lifespan: 1200,
-      quantity: 4,
-      frequency: 30,
-      alpha: { start: 0.7, end: 0.3 },
-      scaleY: { min: 1, max: 1.5 },
+      speedY: { min: 40, max: 90 },
+      speedX: { min: -20, max: 20 },
+      lifespan: 6000,
+      quantity: 2,
+      frequency: 80,
+      alpha: { start: 0.9, end: 0.2 },
+      scale: { min: 0.3, max: 1.0 },
+      rotate: { min: 0, max: 360 },
     });
-    this.rainEmitter.setScrollFactor(0);
+    this.snowEmitter.setScrollFactor(0);
   }
 
   update() {

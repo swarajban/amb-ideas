@@ -32,6 +32,19 @@ get-to-the-treasure/
 - World bounds allow infinite rightward movement but block leftward movement past x=0
 - Road surface + edges use `scrollFactor(0)` — they stay fixed on screen since they look identical everywhere
 
+### Houses
+- Procedurally generated above the road using a seeded random chunk system (CHUNK_WIDTH = 350px)
+- Each chunk has a ~60% chance of spawning a house with a random color, random Y offset, and random X position within the chunk
+- Seeded randomness means the same chunk always produces the same house — no need to store state
+- 6 house color variants, each with a triangular roof, door with doorknob, and cross-pane windows
+- Houses that scroll off-screen to the left are destroyed to keep memory bounded
+
+### Weather (Rain & Snow)
+- Both use Phaser's particle emitter system with `scrollFactor(0)` so they're pinned to the viewport
+- **Rain**: Blue 2x8px rectangles falling fast (300–500 speedY), slight wind slant (speedX -30 to -60), 1200ms lifespan, fading alpha
+- **Snow**: White 8px circles drifting gently (40–90 speedY), random horizontal sway (speedX -20 to +20), 6000ms lifespan, varied scale (0.3–1.0) for depth
+- Currently snow is always-on for design iteration; will be wired to a timed system (rain or snow every 15–45s)
+
 ### Physics & Input
 - Right arrow key applies acceleration (500 px/s²)
 - Drag (400 px/s²) decelerates the car when the key is released, creating a roll-to-stop effect
@@ -45,7 +58,8 @@ get-to-the-treasure/
 
 ## Roadmap
 
-- [ ] Houses along the road (above and below, upside-down below like the drawing)
+- [x] Houses along the road (above the road, procedurally generated)
+- [x] Weather effects (rain and snow particle systems)
+- [ ] Timed weather — rain or snow every 15–45s
 - [ ] Car selection
-- [ ] Weather system (rain/snow storms)
 - [ ] Treasure destination / win condition
